@@ -1,7 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using ColumnExtractor.Traverse;
 
-namespace ColumnExtractor
+namespace ColumnExtractor.Models
 {
 		public class TableData
 		{

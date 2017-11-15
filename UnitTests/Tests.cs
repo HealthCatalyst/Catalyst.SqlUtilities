@@ -191,7 +191,7 @@ FROM StandardExpressionCTE
 UNION ALL
 SELECT *
 FROM InfoExpressionCTE";
-						var parser = new Parser();
+						var parser = new Parser(false, true, true);
 						var results = parser.GetTables(sql);
 
 						Assert.AreEqual(14, results.SelectMany(r => r.Columns).Count());
@@ -319,7 +319,7 @@ FROM SAM.BundledPayments.BPClaimDetailBASE A";
 						var sql = @"
 SELECT CAST(CaseDT AS DATETIME) AS CaseDT
 FROM (SELECT * FROM SAM.AllinaScorecard.GlycemicControlDiabetes WHERE Dimension3VAL = 'Y') z";
-						var parser = new Parser();
+						var parser = new Parser(false, true, true);
 						var results = parser.GetTables(sql);
 
 						Assert.AreEqual(3, results.SelectMany(r => r.Columns).Count());
@@ -331,7 +331,7 @@ FROM (SELECT * FROM SAM.AllinaScorecard.GlycemicControlDiabetes WHERE Dimension3
 						var sql = @"
 SELECT CAST(z.CaseDT AS DATETIME) AS CaseDT
 FROM (SELECT * FROM SAM.AllinaScorecard.GlycemicControlDiabetes WHERE Dimension3VAL = 'Y') z";
-						var parser = new Parser();
+						var parser = new Parser(false, true, true);
 						var results = parser.GetTables(sql);
 
 						Assert.AreEqual(3, results.SelectMany(r => r.Columns).Count());
@@ -351,7 +351,7 @@ FROM (SELECT * FROM SAM.AllinaScorecard.GlycemicControlDiabetes WHERE Dimension3
 				public void TablesWithSameAliasPreferClosest()
 				{
 						var sql = @"SELECT u.PatientID FROM Foo u UNION ALL SELECT u.DoctorID FROM Bar u";
-						var parser = new Parser();
+						var parser = new Parser(false, true, true);
 						var results = parser.GetTables(sql);
 
 						Assert.AreEqual(2, results.SelectMany(r => r.Columns).Count());

@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using ColumnExtractor.Models;
+using ColumnExtractor.Traverse;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace ColumnExtractor
@@ -33,7 +35,7 @@ namespace ColumnExtractor
 						using (var reader = new StringReader(sql))
 						{
 								var result = parser.Parse(reader, out var errors);
-								var traverser = new Traverser(_log, _bracketOutput);
+								var traverser = new Traverser(_log);
 								var columnData = traverser.TraverseObject(result, null).Distinct().ToArray();
 								var tableData = columnData.Where(c => c?.AmbiguousTableReferences != null)
 									.SelectMany(c => c.AmbiguousTableReferences)
@@ -58,7 +60,7 @@ namespace ColumnExtractor
 						using (var reader = new StringReader(sql))
 						{
 								var result = parser.Parse(reader, out var errors);
-								var traverser = new Traverser(_log, _bracketOutput);
+								var traverser = new Traverser(_log);
 								return traverser.TraverseObject(result, null).Distinct().ToArray();
 						}
 				}
@@ -70,7 +72,7 @@ namespace ColumnExtractor
 						using (var reader = new StringReader(sql))
 						{
 								var result = parser.Parse(reader, out var errors);
-								var traverser = new Traverser(_log, _bracketOutput);
+								var traverser = new Traverser(_log);
 								var columnData = traverser.TraverseObject(result, null).Distinct().ToArray();
 								var tableData = columnData
 										.Where(c => c?.AmbiguousTableReferences != null)

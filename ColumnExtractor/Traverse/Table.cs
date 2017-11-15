@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 
-namespace ColumnExtractor
+namespace ColumnExtractor.Traverse
 {
 		public class Table
 		{

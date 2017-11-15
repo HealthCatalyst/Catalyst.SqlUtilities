@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace ColumnExtractor
+namespace ColumnExtractor.Traverse
 {
 		public class Cte
 		{

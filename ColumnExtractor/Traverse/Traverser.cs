@@ -5,7 +5,7 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
-namespace ColumnExtractor
+namespace ColumnExtractor.Traverse
 {
 		public class Traverser
 		{
@@ -64,18 +64,15 @@ namespace ColumnExtractor
 				};
 
 				private readonly bool _log;
-				private readonly bool _bracketOutput;
 
-				public Traverser(bool log, bool bracketOutput)
+				public Traverser(bool log)
 				{
 						_log = log;
-						_bracketOutput = bracketOutput;
 				}
 
-				private void Dump(object value, string description = null, int depth = 3)
+				private void Dump(object value, string description = null)
 				{
 						if (!_log) return;
-						//value.Dump(description, depth);
 
 						if (description != null)
 						{
@@ -124,7 +121,6 @@ namespace ColumnExtractor
 										Dump($"{_pad}ANALYZING WithCtesAndXmlNamespaces");
 										var result = HandleCtes(value as WithCtesAndXmlNamespaces, ctes, parentTables);
 										ctes = ctes.Concat(result.Item1).Distinct().ToArray();
-										//parentTables = parentTables.Concat(result.Item3).ToArray();
 										columns.AddRange(result.Item2);
 								}
 								else if (value is QueryExpression)
@@ -181,8 +177,7 @@ namespace ColumnExtractor
 						if (parentContainers == null) parentContainers = new Table[0];
 						if (ctes == null) ctes = new Cte[0];
 
-						Dump($"{_pad}PARSING COLUMN: tables: { string.Join(", ", containers.Select(c => c.FullyQualifiedName)) }, parent tables: { string.Join(", ", parentContainers.Select(c => c.FullyQualifiedName)) }, ctes: { string.Join(", ", ctes.Select(c => $"{c.Alias ?? "_"}.{c.Name}")) }");
-						//Dump($"{_pad}PARSING COLUMN: tables: { string.Join(", ", containers.Count()) }, parent tables: { string.Join(", ", parentContainers.Count()) }, ctes: { string.Join(", ", ctes.Count()) }");
+						Dump($"{_pad}PARSING COLUMN: tables: { string.Join(", ", containers.Count()) }, parent tables: { string.Join(", ", parentContainers.Count()) }, ctes: { string.Join(", ", ctes.Count()) }");
 
 						var allTables = containers.Concat(parentContainers).Distinct().ToArray();
 
@@ -555,8 +550,7 @@ namespace ColumnExtractor
 
 						var tables = new List<Table>();
 						var ctes = new List<Cte>();
-
-						//https://msdn.microsoft.com/en-us/library/microsoft.sqlserver.transactsql.scriptdom.tablereferencewithalias.aspx?f=255&MSPPError=-2147217396
+						
 						if (obj.GetType().IsAssignableFrom(typeof(NamedTableReference)))
 						{
 								tables.Add(GetTableFromReference(obj as NamedTableReference));
