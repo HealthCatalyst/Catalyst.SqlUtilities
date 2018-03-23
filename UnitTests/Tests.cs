@@ -5,23 +5,23 @@ using Assert = Microsoft.VisualStudio.TestTools.UnitTesting.Assert;
 
 namespace UnitTests
 {
-		[TestFixture]
-		public class Tests
+	[TestFixture]
+	public class Tests
+	{
+		[Test]
+		public void SmokeTest()
 		{
-				[Test]
-				public void SmokeTest()
-				{
-						var sql = @"SELECT * FROM Foo";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+			var sql = @"SELECT * FROM Foo";
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.IsNotNull(results);
-				}
+			Assert.IsNotNull(results);
+		}
 
-				[Test]
-				public void Query1()
-				{
-						var sql = @"
+		[Test]
+		public void Query1()
+		{
+			var sql = @"
 WITH
 LinkMeasureElementCTE AS (
 	SELECT *
@@ -191,16 +191,16 @@ FROM StandardExpressionCTE
 UNION ALL
 SELECT *
 FROM InfoExpressionCTE";
-						var parser = new Parser(false, true, true);
-						var results = parser.GetTables(sql);
+			var parser = new Parser(false, true, true);
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(14, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(14, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void Query2()
-				{
-						var sql = @"
+		[Test]
+		public void Query2()
+		{
+			var sql = @"
 WITH
 CurrentUnitCTE AS (
 	SELECT
@@ -275,30 +275,50 @@ LEFT OUTER JOIN SAM.InfectiousDisease.CAUTI26MetricRiskEventDay chg ON chg.Patie
 LEFT OUTER JOIN CurrentUnitCTE cu ON cu.PatientID = p.PatientID and e.inhospitalFLG=1
 LEFT OUTER JOIN SAM.InfectiousDisease.CAUTI26MetricReviewStatus s ON s.PatientID = p.PatientID AND s.CollectDT = p.DateDT
 LEFT OUTER JOIN SAM.InfectiousDisease.CAUTI26MetricReviewStatusReference st ON st.ReviewConclusionDSC = s.ReviewConclusionDSC";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(55, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(55, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void Between()
-				{
-						var sql = @"
+		[Test]
+		public void CircularCteShouldNotBeListedAsTableDependency()
+		{
+			var sql = @"
+WITH RecurCTE AS
+(
+	SELECT * FROM
+	(
+		SELECT pop.CohortCD, r.Id
+		FROM SAM.Readmissions.ReadmissionPopulation pop
+		JOIN RecurCTE r ON pop.CohortCD = r.CohortCD
+	) i
+)
+SELECT * FROM RecurCTE";
+			var parser = new Parser(true, true, true);
+			var results = parser.GetTables(sql);
+
+			Assert.AreEqual(1, results.SelectMany(r => r.Columns).Count());
+		}
+
+		[Test]
+		public void Between()
+		{
+			var sql = @"
 SELECT c.PatientID
 FROM SAM.InfectiousDisease.CLABSIHIMSSPopulationCulture c
 LEFT OUTER JOIN SAM.InfectiousDisease.CLABSIHIMSSMetricLocalityDepartment d2 ON d2.PatientID = c.PatientID
 	AND c.SpecimenTakenTimeDTS BETWEEN d2.DepartmentBeginDTS AND d2.DepartmentEndDTS;";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(5, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(5, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void ShouldNotShareScopeOutsideOfCte()
-				{
-						var sql = @"
+		[Test]
+		public void ShouldNotShareScopeOutsideOfCte()
+		{
+			var sql = @"
 WITH PartAExclusions AS
 (
 	SELECT A.QualifyingDRGSetID
@@ -307,98 +327,98 @@ WITH PartAExclusions AS
 
 SELECT A.SetID, A.AnchorEncounterFLG
 FROM SAM.BundledPayments.BPClaimDetailBASE A";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(3, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(3, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void Nested()
-				{
-						var sql = @"
+		[Test]
+		public void Nested()
+		{
+			var sql = @"
 SELECT CAST(CaseDT AS DATETIME) AS CaseDT
 FROM (SELECT * FROM SAM.AllinaScorecard.GlycemicControlDiabetes WHERE Dimension3VAL = 'Y') z";
-						var parser = new Parser(false, true, true);
-						var results = parser.GetTables(sql);
+			var parser = new Parser(false, true, true);
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(3, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(3, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void NestedAlias()
-				{
-						var sql = @"
+		[Test]
+		public void NestedAlias()
+		{
+			var sql = @"
 SELECT CAST(z.CaseDT AS DATETIME) AS CaseDT
 FROM (SELECT * FROM SAM.AllinaScorecard.GlycemicControlDiabetes WHERE Dimension3VAL = 'Y') z";
-						var parser = new Parser(false, true, true);
-						var results = parser.GetTables(sql);
+			var parser = new Parser(false, true, true);
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(3, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(3, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void NamedColumnShouldNotBeIncluded()
-				{
-						var sql = @"SELECT [Key] = CAST(Bar AS VARCHAR) FROM Foo";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+		[Test]
+		public void NamedColumnShouldNotBeIncluded()
+		{
+			var sql = @"SELECT [Key] = CAST(Bar AS VARCHAR) FROM Foo";
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(1, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(1, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void TablesWithSameAliasPreferClosest()
-				{
-						var sql = @"SELECT u.PatientID FROM Foo u UNION ALL SELECT u.DoctorID FROM Bar u";
-						var parser = new Parser(false, true, true);
-						var results = parser.GetTables(sql);
+		[Test]
+		public void TablesWithSameAliasPreferClosest()
+		{
+			var sql = @"SELECT u.PatientID FROM Foo u UNION ALL SELECT u.DoctorID FROM Bar u";
+			var parser = new Parser(false, true, true);
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(2, results.SelectMany(r => r.Columns).Count());
-						Assert.AreEqual("[Foo].[PatientID]", results.SelectMany(r => r.Columns).First().FullyQualifiedNM);
-						Assert.AreEqual("[Bar].[DoctorID]", results.SelectMany(r => r.Columns).Last().FullyQualifiedNM);
-				}
+			Assert.AreEqual(2, results.SelectMany(r => r.Columns).Count());
+			Assert.AreEqual("[Foo].[PatientID]", results.SelectMany(r => r.Columns).First().FullyQualifiedNM);
+			Assert.AreEqual("[Bar].[DoctorID]", results.SelectMany(r => r.Columns).Last().FullyQualifiedNM);
+		}
 
-				[Test]
-				public void IifStatement()
-				{
-						var sql = @"SELECT Result = IIF(A >= .5, p.B, C) FROM Foo p";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+		[Test]
+		public void IifStatement()
+		{
+			var sql = @"SELECT Result = IIF(A >= .5, p.B, C) FROM Foo p";
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(3, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(3, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void IncorrectAlias()
-				{
-						var sql = @"SELECT pa.A FROM Foo p";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+		[Test]
+		public void IncorrectAlias()
+		{
+			var sql = @"SELECT pa.A FROM Foo p";
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(0, results.SelectMany(r => r.Columns).Count());
-						Assert.AreEqual(0, results.SelectMany(r => r.PossibleColumns).Count());
-				}
+			Assert.AreEqual(0, results.SelectMany(r => r.Columns).Count());
+			Assert.AreEqual(0, results.SelectMany(r => r.PossibleColumns).Count());
+		}
 
-				[Test]
-				public void InputExpressionOnCaseStatement()
-				{
-						var sql = @"SELECT CASE e.MemberGenderCD
+		[Test]
+		public void InputExpressionOnCaseStatement()
+		{
+			var sql = @"SELECT CASE e.MemberGenderCD
 	    WHEN 'M' THEN CAST('Male' AS varchar(1000))
 	    WHEN 'F' THEN CAST('Female' AS varchar(1000))
     ELSE NULL
     END AS GenderDSC
 FROM AetnaClaim.Claim.Enrollment e";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(1, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(1, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void Unpivot()
-				{
-						var sql = @"SELECT x.ICDDiagnosisCodes
+		[Test]
+		public void Unpivot()
+		{
+			var sql = @"SELECT x.ICDDiagnosisCodes
     FROM AetnaClaim.Claim.ClaimDetail cd
     UNPIVOT 
     (
@@ -412,16 +432,16 @@ FROM AetnaClaim.Claim.Enrollment e";
         ,[ICD9Diagnosis07CD]
         ,[ICD9Diagnosis08CD])
     ) AS x";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(2, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(2, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void Pivot()
-				{
-						var sql = @"
+		[Test]
+		public void Pivot()
+		{
+			var sql = @"
     SELECT 
         year(invoiceDate) as [year],left(datename(month,invoicedate),3)as [month], 
         InvoiceAmount as Amount 
@@ -432,16 +452,16 @@ PIVOT
     FOR [month] IN (jan, feb, mar, apr, 
     may, jun, jul, aug, sep, oct, nov, dec)
 )AS pvt";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(4, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(4, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void PivotWithNestedSelect()
-				{
-						var sql = @"SELECT *
+		[Test]
+		public void PivotWithNestedSelect()
+		{
+			var sql = @"SELECT *
 FROM (
     SELECT 
         year(invoiceDate) as [year],left(datename(month,invoicedate),3)as [month], 
@@ -454,26 +474,26 @@ PIVOT
     FOR [month] IN (jan, feb, mar, apr, 
     may, jun, jul, aug, sep, oct, nov, dec)
 )AS pvt";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(4, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(4, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void InValues()
-				{
-						var sql = @"SELECT PatientID FROM CatalystDEV.Patient.SocialHistoryBASE social WHERE 'Y' in (CigarettesFLG,PipesFLG,CigarsFLG)";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+		[Test]
+		public void InValues()
+		{
+			var sql = @"SELECT PatientID FROM CatalystDEV.Patient.SocialHistoryBASE social WHERE 'Y' in (CigarettesFLG,PipesFLG,CigarsFLG)";
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(4, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(4, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void JoinedCteHasColumnAndSoDoesAnotherJoin()
-				{
-						var sql = @"WITH PatientFilterCount AS (
+		[Test]
+		public void JoinedCteHasColumnAndSoDoesAnotherJoin()
+		{
+			var sql = @"WITH PatientFilterCount AS (
 	SELECT AccountID, p.EventID
 	FROM [EpisodeOfCareEventFilterStagingBASE] p
 	INNER JOIN Foo f ON f.bID = af.EventID
@@ -481,31 +501,31 @@ PIVOT
 SELECT AccountID, pf.EventID
 FROM PatientFilterCount pf
 INNER JOIN Bar ON aID = af.EventID";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(3, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(3, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void JoinedCteHasColumn()
-				{
-						var sql = @"WITH PatientFilterCount AS (
+		[Test]
+		public void JoinedCteHasColumn()
+		{
+			var sql = @"WITH PatientFilterCount AS (
 	SELECT AccountID, p.EventID
 	FROM [EpisodeOfCareEventFilterStagingBASE] p
 )
 SELECT AccountID, pf.EventID
 FROM PatientFilterCount pf";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(2, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(2, results.SelectMany(r => r.Columns).Count());
+		}
 
-				[Test]
-				public void JoinedCteDoesntHaveColumn()
-				{
-						var sql = @"WITH PatientFilterCount AS (
+		[Test]
+		public void JoinedCteDoesntHaveColumn()
+		{
+			var sql = @"WITH PatientFilterCount AS (
 	SELECT p.EventID
 	FROM [EpisodeOfCareEventFilterStagingBASE] p
 	INNER JOIN Foo f ON f.bID = af.EventID
@@ -513,10 +533,10 @@ FROM PatientFilterCount pf";
 SELECT AccountID, pf.EventID
 FROM PatientFilterCount pf
 INNER JOIN Bar ON aID = af.EventID";
-						var parser = new Parser();
-						var results = parser.GetTables(sql);
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
 
-						Assert.AreEqual(4, results.SelectMany(r => r.Columns).Count());
-				}
+			Assert.AreEqual(4, results.SelectMany(r => r.Columns).Count());
 		}
+	}
 }
