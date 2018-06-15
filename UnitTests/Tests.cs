@@ -521,7 +521,7 @@ FROM PatientFilterCount pf";
 
 			Assert.AreEqual(2, results.SelectMany(r => r.Columns).Count());
 		}
-
+		
 		[Test]
 		public void JoinedCteDoesntHaveColumn()
 		{
@@ -537,6 +537,16 @@ INNER JOIN Bar ON aID = af.EventID";
 			var results = parser.GetTables(sql);
 
 			Assert.AreEqual(4, results.SelectMany(r => r.Columns).Count());
+		}
+
+		[Test]
+		public void DatePartUnitIgnored()
+		{
+			var sql = @"SELECT DATEPART(dw, DateDTS) AS TestDate FROM foo.bar";
+			var parser = new Parser();
+			var results = parser.GetTables(sql);
+			
+			Assert.AreEqual(1, results.SelectMany(r => r.Columns).Count());
 		}
 	}
 }

@@ -11,7 +11,7 @@ namespace ColumnExtractor.Traverse
 	{
 		private string _pad => new string(' ', _level * 2);
 		private int _level;
-		private readonly string[] _dateFunctions = { "DATEADD", "DATEDIFF", "DATEDIFF_BIG", "DATEFROMPARTS", "DATENAME" };
+		private readonly string[] _dateFunctions = { "DATEPART", "DATEADD", "DATEDIFF", "DATEDIFF_BIG", "DATEFROMPARTS", "DATENAME" };
 		private readonly string[] _reservedKeywords =
 		{
 						"ABSOLUTE", "ACTION", "ADD", "ADMIN", "AFTER", "AGGREGATE", "ALIAS", "ALL", "ALLOCATE", "ALTER", "AND", "ANY",
@@ -342,7 +342,7 @@ namespace ColumnExtractor.Traverse
 			return GetColumnFromIdentifiers(names, null, containers, parentContainers, ctes);
 		}
 
-		public (IEnumerable<Cte>, IEnumerable<Column>, IEnumerable<Table>) HandleCtes(WithCtesAndXmlNamespaces withCtesAndXmlNamespaces, Cte[] parentCtes, Table[] parentTables)
+		public Tuple<IEnumerable<Cte>, IEnumerable<Column>, IEnumerable<Table>> HandleCtes(WithCtesAndXmlNamespaces withCtesAndXmlNamespaces, Cte[] parentCtes, Table[] parentTables)
 		{
 			_level++;
 			var tables = new List<Table>();
@@ -353,7 +353,7 @@ namespace ColumnExtractor.Traverse
 			{
 				Dump($"{_pad}WithCtesAndXmlNamespaces is NULL");
 				_level--;
-				return (Enumerable.Empty<Cte>(), Enumerable.Empty<Column>(), Enumerable.Empty<Table>());
+				return new Tuple<IEnumerable<Cte>, IEnumerable<Column>, IEnumerable<Table>>(Enumerable.Empty<Cte>(), Enumerable.Empty<Column>(), Enumerable.Empty<Table>());
 			}
 
 			var i = 0;
@@ -389,10 +389,10 @@ namespace ColumnExtractor.Traverse
 			}
 
 			_level--;
-			return (ctes, columns.Where(c => c != null), tables);
+			return new Tuple<IEnumerable<Cte>, IEnumerable<Column>, IEnumerable<Table>>(ctes, columns.Where(c => c != null), tables);
 		}
 
-		public (IEnumerable<Column>, IEnumerable<Table>) HandleQuery(object obj, Cte[] ctes, Table[] parentTables = null)
+		public Tuple<IEnumerable<Column>, IEnumerable<Table>> HandleQuery(object obj, Cte[] ctes, Table[] parentTables = null)
 		{
 			_level++;
 			var tables = new List<Table>();
@@ -402,7 +402,7 @@ namespace ColumnExtractor.Traverse
 			{
 				Dump($"{_pad}Query is NULL");
 				_level--;
-				return (Enumerable.Empty<Column>(), Enumerable.Empty<Table>());
+				return new Tuple<IEnumerable<Column>, IEnumerable<Table>>(Enumerable.Empty<Column>(), Enumerable.Empty<Table>());
 			}
 
 			var properties = new[] { "FirstQueryExpression", "SecondQueryExpression", "QueryExpression" };
@@ -543,12 +543,12 @@ namespace ColumnExtractor.Traverse
 
 			_level--;
 
-			return (columns.Where(c => c != null), tables);
+			return new Tuple<IEnumerable<Column>, IEnumerable<Table>>(columns.Where(c => c != null), tables);
 		}
 
-		public (IEnumerable<Cte>, IEnumerable<Table>) HandleTables(object obj, Cte[] parentCtes, Table[] parentTables = null)
+		public Tuple<IEnumerable<Cte>, IEnumerable<Table>> HandleTables(object obj, Cte[] parentCtes, Table[] parentTables = null)
 		{
-			if (obj == null) return (Enumerable.Empty<Cte>(), Enumerable.Empty<Table>()); ;
+			if (obj == null) return new Tuple<IEnumerable<Cte>, IEnumerable<Table>>(Enumerable.Empty<Cte>(), Enumerable.Empty<Table>());
 
 			var tables = new List<Table>();
 			var ctes = new List<Cte>();
@@ -598,7 +598,7 @@ namespace ColumnExtractor.Traverse
 				if (references.Any()) _level--;
 			}
 
-			return (ctes.Where(c => c != null), tables.Where(t => t != null));
+			return new Tuple<IEnumerable<Cte>, IEnumerable<Table>>(ctes.Where(c => c != null), tables.Where(t => t != null));
 		}
 
 		public IEnumerable<Column> HandleColumns(object obj, string alias, Table[] tables, Table[] parentTables, Cte[] ctes)
