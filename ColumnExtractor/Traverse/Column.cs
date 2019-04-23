@@ -11,6 +11,8 @@ namespace ColumnExtractor.Traverse
 				public Table AbsoluteTableReference;
 				public IEnumerable<Table> AmbiguousTableReferences;
 				public IEnumerable<Cte> CteReferences;
+        public bool IsPivotGeneratedColumn;
+
 				public string FullyQualifiedName => GetFullyQualifiedName(true);
 
 				public string GetFullyQualifiedName(bool brackets)
@@ -27,22 +29,29 @@ namespace ColumnExtractor.Traverse
 							: availableParts.Any() ? $"{string.Join(".", availableParts)}" : null;
 				}
 
-				public override bool Equals(object obj)
-				{
-						return obj is Column summary &&
-									 Name.Equals(summary.Name, StringComparison.OrdinalIgnoreCase) &&
-									 EqualityComparer<Table>.Default.Equals(AbsoluteTableReference, summary.AbsoluteTableReference) &&
-									 EqualityComparer<IEnumerable<Table>>.Default.Equals(AmbiguousTableReferences,
-										 summary.AmbiguousTableReferences);
-				}
+        protected bool Equals(Column other)
+        {
+          return string.Equals(Name, other.Name) && Equals(AbsoluteTableReference, other.AbsoluteTableReference) && Equals(AmbiguousTableReferences, other.AmbiguousTableReferences) && IsPivotGeneratedColumn == other.IsPivotGeneratedColumn;
+        }
 
-				public override int GetHashCode()
-				{
-						var hashCode = 1102383335;
-						hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Name != null ? Name.ToLowerInvariant() : null);
-						hashCode = hashCode * -1521134295 + EqualityComparer<Table>.Default.GetHashCode(AbsoluteTableReference);
-						hashCode = hashCode * -1521134295 + EqualityComparer<IEnumerable<Table>>.Default.GetHashCode(AmbiguousTableReferences);
-						return hashCode;
-				}
-		}
+        public override bool Equals(object obj)
+        {
+          if (ReferenceEquals(null, obj)) return false;
+          if (ReferenceEquals(this, obj)) return true;
+          if (obj.GetType() != this.GetType()) return false;
+          return Equals((Column) obj);
+        }
+
+        public override int GetHashCode()
+        {
+          unchecked
+          {
+            var hashCode = (Name != null ? Name.GetHashCode() : 0);
+            hashCode = (hashCode * 397) ^ (AbsoluteTableReference != null ? AbsoluteTableReference.GetHashCode() : 0);
+            hashCode = (hashCode * 397) ^ (AmbiguousTableReferences != null ? AmbiguousTableReferences.GetHashCode() : 0);
+            hashCode = (hashCode * 397) ^ IsPivotGeneratedColumn.GetHashCode();
+            return hashCode;
+          }
+        }
+    }
 }

@@ -149,8 +149,12 @@ namespace ColumnExtractor.Traverse
 				}
 			}
 
-			return columns;
-		}
+      // Remove pivot generated column duplicates
+      return columns
+        .OrderByDescending(c => c.IsPivotGeneratedColumn)
+        .GroupBy(c => c.FullyQualifiedName)
+        .Select(grp => grp.First());
+    }
 
 		public Table GetTableFromReference(NamedTableReference namedTableReference)
 		{
@@ -169,7 +173,7 @@ namespace ColumnExtractor.Traverse
 			return table;
 		}
 
-		public Column GetColumnFromIdentifiers(string[] identifiers, string alias, IEnumerable<Table> containers, IEnumerable<Table> parentContainers, IEnumerable<Cte> ctes, bool inPivot = false)
+    public Column GetColumnFromIdentifiers(string[] identifiers, string alias, IEnumerable<Table> containers, IEnumerable<Table> parentContainers, IEnumerable<Cte> ctes, bool inPivot = false)
 		{
 			if (identifiers == null) return null;
 
@@ -177,7 +181,7 @@ namespace ColumnExtractor.Traverse
 			if (parentContainers == null) parentContainers = new Table[0];
 			if (ctes == null) ctes = new Cte[0];
 
-			Dump($"{_pad}PARSING COLUMN: tables: { string.Join(", ", containers.Count()) }, parent tables: { string.Join(", ", parentContainers.Count()) }, ctes: { string.Join(", ", ctes.Count()) }");
+			Dump($"{_pad}PARSING COLUMN: tables: { string.Join(", ", containers.Select(c => c.Name)) }, parent tables: { string.Join(", ", parentContainers.Select(c => c.Name)) }, ctes: { string.Join(", ", ctes.Select(c => c.Name)) }");
 
 			var allTables = containers.Concat(parentContainers).Distinct().ToArray();
 
@@ -194,20 +198,24 @@ namespace ColumnExtractor.Traverse
 
 			if (identifiers.Length == 1)
 			{
-				matches.AddRange(containers);
 				cteMatches.AddRange(ctes);
 				linkedMatches.AddRange(cteMatches.Where(cte => cte.LinkedTables.Count == 1
 						&& (cte.LinkedTables.First().SelectColumns.Contains(column.Name.ToLowerInvariant())
-								|| cte.LinkedTables.First().SelectColumns.Contains("*")
+								
 								|| inPivot))
 					.SelectMany(cte => cte.LinkedTables)
 					.Distinct());
-				matches.AddRange(cteMatches.Where(cte => cte.LinkedTables.Any(lt =>
-								lt.PossibleSelectColumns.Contains(column.Name.ToLowerInvariant())
-								|| lt.PossibleSelectColumns.Contains("*")
-								|| inPivot))
-					.SelectMany(cte => cte.LinkedTables)
-					.Distinct());
+
+        if (!linkedMatches.Any())
+        {
+          matches.AddRange(containers);
+          matches.AddRange(cteMatches.Where(cte => cte.LinkedTables.Any(lt =>
+              lt.PossibleSelectColumns.Contains(column.Name.ToLowerInvariant())
+              || lt.PossibleSelectColumns.Contains("*")
+              || inPivot))
+            .SelectMany(cte => cte.LinkedTables)
+            .Distinct());
+        }
 			}
 			else if (identifiers.Length == 2)
 			{
@@ -226,24 +234,26 @@ namespace ColumnExtractor.Traverse
 					matches.Add(aliasMatches.First());
 				}
 
-				cteMatches.AddRange(ctes.Where(cte => !string.IsNullOrWhiteSpace(cte.Alias) && cte.Alias.Equals(tableNameOrAlias, StringComparison.OrdinalIgnoreCase)
-																			 || cte.Alias == null && cte.Name.Equals(tableNameOrAlias, StringComparison.OrdinalIgnoreCase)));
+        cteMatches.AddRange(ctes);
+        //cteMatches.AddRange(ctes.Where(cte => !string.IsNullOrWhiteSpace(cte.Name) && cte.Name.Equals(tableNameOrAlias, StringComparison.OrdinalIgnoreCase)));
 
 				linkedMatches.AddRange(cteMatches
 							.Where(cte => cte.LinkedTables.Count == 1
 										&& (cte.LinkedTables.First().SelectColumns.Contains(column.Name.ToLowerInvariant())
-										|| cte.LinkedTables.First().SelectColumns.Contains("*")
 										|| inPivot))
 							.SelectMany(cte => cte.LinkedTables)
 							.Distinct());
 
-				matches.AddRange(cteMatches.Where(cte => cte.LinkedTables.Any(lt =>
-								lt.PossibleSelectColumns.Contains(column.Name.ToLowerInvariant())
-								|| lt.PossibleSelectColumns.Contains("*")
-								|| inPivot))
-					.SelectMany(cte => cte.LinkedTables)
-					.Distinct());
-			}
+        if (!linkedMatches.Any())
+        {
+          matches.AddRange(cteMatches.Where(cte => cte.LinkedTables.Any(lt =>
+              lt.PossibleSelectColumns.Contains(column.Name.ToLowerInvariant())
+              || lt.PossibleSelectColumns.Contains("*")
+              || inPivot))
+            .SelectMany(cte => cte.LinkedTables)
+            .Distinct());
+        }
+      }
 			else if (identifiers.Length == 3)
 			{
 				var schemaName = identifiers[0];
@@ -279,9 +289,13 @@ namespace ColumnExtractor.Traverse
 				.Select(m => m.Name.ToLowerInvariant()).ToArray();
 			cteMatches.AddRange(ctes.Where(cte => tableNames.Contains(cte.Name.ToLowerInvariant())));
 
-			if (cteMatches.Any())
+      cteMatches = cteMatches.Distinct().ToList();
+      linkedMatches = linkedMatches.Distinct().ToList();
+      matches = matches.Distinct().ToList();
+
+      if (cteMatches.Any())
 			{
-				column.CteReferences = cteMatches.Select(t => new Cte { Name = t.Name, Alias = t.Alias }).ToArray();
+				column.CteReferences = cteMatches.Select(t => new Cte { Name = t.Name }).ToArray();
 
 				var cteNames = ctes.Select(cte => cte.Name.ToLowerInvariant()).ToArray();
 				var reject = matches.Where(m => m.Server == null && m.Database == null && m.Schema == null && cteNames.Contains(m.Name.ToLowerInvariant()));
@@ -299,6 +313,14 @@ namespace ColumnExtractor.Traverse
 				Dump($"{_pad}> FOUND TABLES (MATCHES: {matches.Count}): [{ string.Join(", ", matches.Select(c => c.FullyQualifiedName)) }]");
 				if (matches.Count > 1) column.AmbiguousTableReferences = matches;
 				else if (matches.Count == 1) column.AbsoluteTableReference = matches.First();
+        else if (cteMatches.Count == 1 && cteMatches.First().LinkedTables.Count == 1)
+        {
+          column.AbsoluteTableReference = cteMatches.First().LinkedTables.First();
+        }
+        else if (cteMatches.SelectMany(c => c.LinkedTables).Distinct().Count() == 1)
+        {
+          column.AbsoluteTableReference = cteMatches.SelectMany(c => c.LinkedTables).Distinct().First();
+        }
 			}
 
 			var matchingTable = column.AbsoluteTableReference != null
@@ -374,15 +396,18 @@ namespace ColumnExtractor.Traverse
 				}
 
 				cte.LinkedTables = tables.Distinct().ToList();
+
 				foreach (var linkedTable in cte.LinkedTables)
 				{
 					linkedTable.SelectColumns = columns
 						.Where(c => ReferenceEquals(c.AbsoluteTableReference, linkedTable)).Select(c => c.Name.ToLowerInvariant())
+            .Distinct()
 						.ToArray();
 					linkedTable.PossibleSelectColumns = columns
 						.Where(c => c.AmbiguousTableReferences != null && c.AmbiguousTableReferences.Any(t => ReferenceEquals(t, linkedTable)))
 						.Select(c => c.Name.ToLowerInvariant())
-						.ToArray();
+            .Distinct()
+            .ToArray();
 				}
 
 				if (cte.LinkedTables.Any()) Dump($"{_pad}FOUND CTE-LINKED TABLES: {cte.Name}, tables: {string.Join(", ", cte.LinkedTables.Select(t => t.FullyQualifiedName))}");
@@ -426,8 +451,8 @@ namespace ColumnExtractor.Traverse
 					tables.AddRange(result.Item2);
 				}
 			}
-
-			var fromClause = Helpers.GetPropertyValueWithName(obj, "FromClause");
+      
+      var fromClause = Helpers.GetPropertyValueWithName(obj, "FromClause");
 			if (fromClause != null)
 			{
 				var tableReferences = Helpers.GetEnumerablePropertyValueWithName(fromClause, "TableReferences");
@@ -450,7 +475,14 @@ namespace ColumnExtractor.Traverse
 				Dump($"{_pad}PROPERTY [SelectElements]: handling columns...");
 				foreach (var element in selectElements)
 				{
-					columns.AddRange(HandleColumns(element, null, tables.ToArray(), parentTables, ctes));
+          if (element is SelectScalarExpression selectScalarExpression && selectScalarExpression.Expression is StringLiteral)
+          {
+            columns.Add(new Column { Name = selectScalarExpression.ColumnName.Value });
+          }
+          else
+          {
+            columns.AddRange(HandleColumns(element, null, tables.ToArray(), parentTables, ctes));
+          }
 				}
 			}
 
@@ -557,7 +589,7 @@ namespace ColumnExtractor.Traverse
 			{
 				tables.Add(GetTableFromReference(obj as NamedTableReference));
 			}
-			else if (obj.GetType().IsAssignableFrom(typeof(QueryDerivedTable)))
+      else if (obj.GetType().IsAssignableFrom(typeof(QueryDerivedTable)))
 			{
 				var derived = obj as QueryDerivedTable;
 				Dump($"{_pad}ANALYZING QueryDerivedTable...");
@@ -566,24 +598,48 @@ namespace ColumnExtractor.Traverse
 				{
 					Dump($"{_pad}PROPERTY [QueryExpression]: handling...");
 					var result = HandleQuery(derived.QueryExpression, parentCtes, parentTables);
-					var cte = new Cte { Name = derived.Alias?.Value, LinkedTables = result.Item2.Distinct().ToList() };
+          var cte = new Cte { Name = derived.Alias?.Value, LinkedTables = result.Item2.Distinct().ToList() };
 
 					foreach (var linkedTable in cte.LinkedTables)
 					{
 						linkedTable.SelectColumns = result.Item1
 							.Where(c => ReferenceEquals(c.AbsoluteTableReference, linkedTable)).Select(c => c.Name.ToLowerInvariant())
-							.ToArray();
+              .Distinct()
+              .ToArray();
 						linkedTable.PossibleSelectColumns = result.Item1
 							.Where(c => c.AmbiguousTableReferences != null && c.AmbiguousTableReferences.Any(t => ReferenceEquals(t, linkedTable)))
 							.Select(c => c.Name.ToLowerInvariant())
-							.ToArray();
+              .Distinct()
+              .ToArray();
 					}
 
 					if (cte.LinkedTables.Any()) Dump($"{_pad}FOUND DERIVED-LINKED TABLES: {cte.Name}, tables: {string.Join(", ", cte.LinkedTables.Select(t => t.FullyQualifiedName))}");
 					ctes.Add(cte);
 				}
 			}
-			else
+      else if (obj.GetType().IsAssignableFrom(typeof(UnpivotedTableReference)))
+      {
+        if (obj is UnpivotedTableReference unpivoted)
+        {
+          var linkedTables = HandleTables(unpivoted.TableReference, parentCtes, parentTables);
+          var cteLinkedTables = linkedTables.Item1.SelectMany(c => c.LinkedTables).Concat(linkedTables.Item2);
+
+          ctes.AddRange(linkedTables.Item1);
+          ctes.Add(new Cte { Name = unpivoted.Alias.Value, LinkedTables = cteLinkedTables.ToList() });
+        }
+      }
+      else if (obj.GetType().IsAssignableFrom(typeof(PivotedTableReference)))
+      {
+        if (obj is PivotedTableReference pivoted)
+        {
+          var linkedTables = HandleTables(pivoted.TableReference, parentCtes, parentTables);
+          var cteLinkedTables = linkedTables.Item1.SelectMany(c => c.LinkedTables).Concat(linkedTables.Item2);
+
+          ctes.AddRange(linkedTables.Item1);
+          ctes.Add(new Cte { Name = pivoted.Alias.Value, LinkedTables = cteLinkedTables.ToList() });
+        }
+      }
+      else
 			{
 				var references = Helpers.GetPropertiesWithNames(obj, "FirstTableReference", "SecondTableReference", "TableReference", "Join").ToArray();
 				if (references.Any()) _level++;
@@ -627,10 +683,6 @@ namespace ColumnExtractor.Traverse
 					handleColumns.AddRange(HandleProperties(obj, alias, tables, parentTables, ctes));
 				}
 			}
-			else if (obj.GetType().IsAssignableFrom(typeof(ColumnReferenceExpression)))
-			{
-				handleColumns.Add(GetColumnFromReference(obj as ColumnReferenceExpression, alias, tables, parentTables, ctes));
-			}
 			else if (obj.GetType().IsAssignableFrom(typeof(SelectStarExpression)))
 			{
 				handleColumns.Add(GetColumnFromStarReference(obj as SelectStarExpression, tables, parentTables, ctes));
@@ -639,13 +691,35 @@ namespace ColumnExtractor.Traverse
 			{
 				if (obj is PivotedTableReference pivotedTableReference)
 				{
-					handleColumns.Add(GetColumnFromReference(pivotedTableReference.PivotColumn, null, tables, parentTables, ctes, true));
-					if (pivotedTableReference.ValueColumns != null)
+          string tableName = null;
+          string tableAlias = null;
+
+          if (pivotedTableReference.TableReference is NamedTableReference namedTableReference)
+          {
+            tableName = namedTableReference.SchemaObject.BaseIdentifier.Value;
+            tableAlias = namedTableReference.Alias?.Value;
+          }
+          if (pivotedTableReference.TableReference is QueryDerivedTable queryDerivedTable)
+          {
+            tableAlias = queryDerivedTable.Alias?.Value;
+          }
+
+          handleColumns.Add(GetColumnFromReference(pivotedTableReference.PivotColumn, null, tables, parentTables, ctes, true));
+
+          if (pivotedTableReference.PivotColumn != null)
+          {
+            var identifiers = new[] { tableAlias ?? tableName }.Concat(pivotedTableReference.PivotColumn.MultiPartIdentifier.Identifiers.Select(i => i.Value)).ToArray();
+            var column = GetColumnFromIdentifiers(identifiers, null, tables, parentTables, ctes, true);
+            handleColumns.Add(column);
+          }
+
+          if (pivotedTableReference.ValueColumns != null)
 					{
 						foreach (var valueColumn in pivotedTableReference.ValueColumns)
-						{
-							handleColumns.Add(GetColumnFromReference(valueColumn, null, tables, parentTables, ctes, true));
-						}
+            {
+              var column = GetColumnFromReference(valueColumn, null, tables, parentTables, ctes, true);
+              handleColumns.Add(column);
+            }
 					}
 				}
 
@@ -654,20 +728,54 @@ namespace ColumnExtractor.Traverse
 			else if (obj.GetType().IsAssignableFrom(typeof(UnpivotedTableReference)))
 			{
 				if (obj is UnpivotedTableReference unpivotedTableReference)
-				{
-					if (unpivotedTableReference.PivotColumn?.Value != null)
-					{
-						handleColumns.Add(GetColumnFromIdentifiers(new[] { unpivotedTableReference.PivotColumn.Value }, null, tables, parentTables, ctes, true));
-					}
-					if (unpivotedTableReference.ValueColumn?.Value != null)
-					{
-						handleColumns.Add(GetColumnFromIdentifiers(new[] { unpivotedTableReference.ValueColumn.Value }, null, tables, parentTables, ctes, true));
-					}
+        {
+          string tableName = null;
+          string tableAlias = null;
+
+          if (unpivotedTableReference.TableReference is NamedTableReference namedTableReference)
+          {
+            tableName = namedTableReference.SchemaObject.BaseIdentifier.Value;
+            tableAlias = namedTableReference.Alias?.Value;
+          }
+          if (unpivotedTableReference.TableReference is QueryDerivedTable queryDerivedTable)
+          {
+            tableAlias = queryDerivedTable.Alias?.Value;
+          }
+
+          if (unpivotedTableReference.PivotColumn?.Value != null)
+          {
+            var column = GetColumnFromIdentifiers(new[] { tableAlias ?? tableName, unpivotedTableReference.PivotColumn.Value }, null, tables, parentTables, ctes, true);
+            column.IsPivotGeneratedColumn = true;
+            Dump($"{_pad}* UNPIVOT GENERATED COLUMN");
+            column.AbsoluteTableReference.SelectColumns = column.AbsoluteTableReference.SelectColumns.Concat(new[] { column.Name.ToLowerInvariant() }).Distinct().ToArray();
+            handleColumns.Add(column);
+          }
+          if (unpivotedTableReference.ValueColumn?.Value != null)
+          {
+            var column = GetColumnFromIdentifiers(new[] { tableAlias ?? tableName, unpivotedTableReference.ValueColumn.Value }, null, tables, parentTables, ctes, true);
+            column.IsPivotGeneratedColumn = true;
+            Dump($"{_pad}* UNPIVOT GENERATED COLUMN");
+            column.AbsoluteTableReference.SelectColumns = column.AbsoluteTableReference.SelectColumns.Concat(new[] { column.Name.ToLowerInvariant() }).Distinct().ToArray();
+            handleColumns.Add(column);
+          }
+          if (unpivotedTableReference.InColumns?.Count > 0)
+          {
+            foreach (var inColumn in unpivotedTableReference.InColumns)
+            {
+              var identifiers = new [] { tableAlias ?? tableName }.Concat(inColumn.MultiPartIdentifier.Identifiers.Select(i => i.Value)).ToArray();
+
+              handleColumns.Add(GetColumnFromIdentifiers(identifiers, null, tables, parentTables, ctes, true));
+            }
+          }
 				}
 
 				handleColumns.AddRange(HandleProperties(obj, alias, tables, parentTables, ctes));
 			}
-			else if (obj is QueryExpression)
+      else if (obj.GetType().IsAssignableFrom(typeof(ColumnReferenceExpression)))
+      {
+        handleColumns.Add(GetColumnFromReference(obj as ColumnReferenceExpression, alias, tables, parentTables, ctes));
+      }
+      else if (obj is QueryExpression)
 			{
 				Dump($"{_pad}HANDLING QueryExpression...");
 				handleColumns.AddRange(HandleQuery(obj, ctes, tables).Item1);
@@ -695,7 +803,7 @@ namespace ColumnExtractor.Traverse
 				if (subQuery != null)
 				{
 					Dump($"{_pad}Is SubQuery...");
-					var columns = TraverseObject(subQuery, ctes, tables.ToArray());
+					var columns = TraverseObject(subQuery, ctes, tables);
 
 					handleColumns.AddRange(columns);
 				}
@@ -706,12 +814,12 @@ namespace ColumnExtractor.Traverse
 
 				var properties = new[]
 				{
-										"FirstQueryExpression", "SecondQueryExpression", "FirstTableReference", "SecondTableReference", "TableReference", "Join",
-										"FirstExpression", "SecondExpression", "WhenExpression", "ThenExpression", "ElseExpression", "Expression", "Expressions",
-										"FirstExpression", "SecondExpression", "ThirdExpression", "QueryExpression", "Parameter", "SearchCondition", "Parameters",
-										"WhenClauses", "OrderByClause", "OrderByElements", "OverClause", "InputExpression", "WithinGroupClause", "Partitions",
-										"WindowFrameClause", "WindowDelimiter", "OffsetValue", "Top", "Bottom", "Predicate", "Values"
-								};
+						"FirstQueryExpression", "SecondQueryExpression", "FirstTableReference", "SecondTableReference", "TableReference", "Join",
+						"FirstExpression", "SecondExpression", "WhenExpression", "ThenExpression", "ElseExpression", "Expression", "Expressions",
+						"FirstExpression", "SecondExpression", "ThirdExpression", "QueryExpression", "Parameter", "SearchCondition", "Parameters",
+						"WhenClauses", "OrderByClause", "OrderByElements", "OverClause", "InputExpression", "WithinGroupClause", "Partitions",
+						"WindowFrameClause", "WindowDelimiter", "OffsetValue", "Top", "Bottom", "Predicate", "Values"
+				};
 
 				var references = Helpers.GetPropertiesWithNames(obj, properties.Except(skipProperties).ToArray()).ToArray();
 
