@@ -22,179 +22,16 @@ namespace UnitTests
 		public void Query1()
 		{
 			var sql = @"
-WITH
-LinkMeasureElementCTE AS (
-	SELECT *
-	FROM SAM.Pneumonia.QVExtElementBASE
-),
+        WITH
+        LinkMeasureElementCTE AS (SELECT * FROM SAM.Pneumonia.QVExtElementBASE),
+        ConfigReplaceCTE AS (SELECT [ExpressionCD] = 'Base'),
+        StandardExpressionCTE AS (SELECT ElementCD FROM LinkMeasureElementCTE CROSS JOIN ConfigReplaceCTE c)
 
-ConfigReplaceCTE AS (
-	SELECT
-		[ExpressionCD]              = 'Base',
-		[ReplaceSetAnalysisWithSTR] = '',
-		[ReplaceAggrWithSTR]        = '@(=%DateCycleGroupByCOL)'		
-	UNION ALL
-	SELECT
-		[ExpressionCD]              = 'Total',
-		[ReplaceSetAnalysisWithSTR] = 'TOTAL ',
-		[ReplaceAggrWithSTR]        = '@(=%DateCycleGroupByCOL)'		
-	UNION ALL
-	SELECT
-		[ExpressionCD]              = 'PeriodCurrent',
-		[ReplaceSetAnalysisWithSTR] = '{<@(=@(xPeriodCurrent))>}',
-		[ReplaceAggrWithSTR]        = '@(=%MeasureRangeGroupByCOL)'	
-	UNION ALL
-	SELECT
-		[ExpressionCD]              = 'PeriodPrior',
-		[ReplaceSetAnalysisWithSTR] = '{<@(=@(xPeriodPrior))>}',
-		[ReplaceAggrWithSTR]        = '@(=%MeasureRangeGroupByCOL)'
-),
-
-
-
-/** add standard set analysis expressions **/
-StandardExpressionCTE AS (
-	SELECT
-		 MeasureID
-		,ElementCD
-		,c.ExpressionCD AS ExpressionCD
-		,REPLACE(REPLACE(ExpressionSTR,SetAnalysisSTR,c.ReplaceSetAnalysisWithSTR),AggrSTR,c.ReplaceAggrWithSTR) AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-	CROSS JOIN ConfigReplaceCTE c
-
-	UNION ALL
-	SELECT
-		 MeasureID
-		,ElementCD
-		,'BaseChng' AS ExpressionCD
-		,'NUM(@(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={Base}>}%ExpressionSTR))-@(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={Total}>}%ExpressionSTR)),chr(9650)&'+CHAR(39)+MeasureFormatCD+';'+CHAR(39)+'&chr(9660)&'+CHAR(39)+MeasureFormatCD+CHAR(39)+')' AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-	UNION ALL
-	SELECT
-		 MeasureID
-		,ElementCD
-		,'BasePcntChng' AS ExpressionCD
-		,'NUM((@(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={Base}>}%ExpressionSTR))-@(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={Total}>}%ExpressionSTR)))/(@(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={Base}>}%ExpressionSTR))),'+CHAR(39)+'#,##0%'+CHAR(39)+')' AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-
-	UNION ALL
-	SELECT
-		 MeasureID
-		,ElementCD
-		,'PeriodChng' AS ExpressionCD
-		,'NUM(@(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={PeriodCurrent}>}%ExpressionSTR))-@(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={PeriodPrior}>}%ExpressionSTR)),chr(9650)&'+CHAR(39)+MeasureFormatCD+';'+CHAR(39)+'&chr(9660)&'+CHAR(39)+MeasureFormatCD+CHAR(39)+')' AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-	UNION ALL
-	SELECT
-		 MeasureID
-		,ElementCD
-		,'PeriodPcntChng' AS ExpressionCD
-		,'NUM((@(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={PeriodCurrent}>}%ExpressionSTR))-@(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={PeriodPrior}>}%ExpressionSTR)))/(@(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={PeriodCurrent}>}%ExpressionSTR))),'+CHAR(39)+'#,##0%'+CHAR(39)+')' AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-),
-
-/** add additional elements for informational purposes **/
-InfoExpressionCTE AS (
-	SELECT
-		 MeasureID
-		,'LABEL' AS ElementCD
-		,'Base' AS ExpressionCD
-		,CHAR(39)+MeasureNM+CHAR(39) AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-	UNION
-	SELECT
-		 MeasureID
-		,'UNIT' AS ElementCD
-		,'Base' AS ExpressionCD
-		,CHAR(39)+MeasureUnitDSC+CHAR(39) AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-	UNION
-	SELECT
-		 MeasureID
-		,'UNIT_NUMER' AS ElementCD
-		,'Base' AS ExpressionCD
-		,CHAR(39)+NumUnitDSC+CHAR(39) AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-	UNION
-	SELECT
-		 MeasureID
-		,'UNIT_DENOM' AS ElementCD
-		,'Base' AS ExpressionCD
-		,CHAR(39)+DenomUnitDSC+CHAR(39) AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-	UNION
-	SELECT
-		 MeasureID
-		,'ICON' AS ElementCD
-		,'Base' AS ExpressionCD
-		,CHAR(39)+'qmem://ImageID/'+ISNULL(MeasureIconNM,'')+CHAR(39) AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-	UNION
-	SELECT
-		 MeasureID
-		,'ICON_GHOST' AS ElementCD
-		,'Base' AS ExpressionCD
-		,CHAR(39)+'qmem://ImageID/'+ISNULL(MeasureIconNM+'_ghost','')+CHAR(39) AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-	UNION
-	SELECT
-		 MeasureID
-		,'ICON_TYPE' AS ElementCD
-		,'Base' AS ExpressionCD
-		,CASE MeasureTypeDSC
-			WHEN 'Outcome' THEN CHAR(39)+'qmem://ImageID/outcome_rounded'+CHAR(39)
-			WHEN 'Process' THEN CHAR(39)+'qmem://ImageID/process_rounded'+CHAR(39)
-		 END AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-	UNION
-	SELECT
-		 MeasureID
-		,'TYPE' AS ElementCD
-		,'Base' AS ExpressionCD
-		,CHAR(39)+MeasureTypeDSC+CHAR(39) AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-
-	UNION
-	SELECT
-		 MeasureID
-		,ElementCD
-		,'BaseChng_Color' AS ExpressionCD
-		,CASE
-			WHEN MeasureDirectionCD = 'n/a'
-			THEN 'none'
-			WHEN MeasureDirectionCD = 'Up'
-			THEN 'IF( @(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={BaseChng}>}%ExpressionSTR)) >= 0,''green'',''red'')'
-			WHEN MeasureDirectionCD = 'Down'
-			THEN 'IF( @(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={BaseChng}>}%ExpressionSTR)) > 0,''red'',''green'')'
-		 END AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-
-	UNION
-	SELECT
-		 MeasureID
-		,ElementCD
-		,'PeriodChng_Color' AS ExpressionCD
-		,CASE
-			WHEN MeasureDirectionCD = 'n/a'
-			THEN 'none'
-			WHEN MeasureDirectionCD = 'Up'
-			THEN 'IF( @(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={PeriodChng}>}%ExpressionSTR)) >= 0,''green'',''red'')'
-			WHEN MeasureDirectionCD = 'Down'
-			THEN 'IF( @(=ONLY({<%MeasureID={'+CAST(MeasureID AS VARCHAR)+'},%ElementCD={'+ElementCD+'},%ExpressionCD={PeriodChng}>}%ExpressionSTR)) > 0,''red'',''green'')'
-		 END AS ExpressionSTR
-	FROM LinkMeasureElementCTE
-)
-
-/** union all the magic together **/
-SELECT *
-FROM StandardExpressionCTE
-UNION ALL
-SELECT *
-FROM InfoExpressionCTE";
+        SELECT * FROM StandardExpressionCTE";
 			var parser = new Parser(false, true, true);
 			var results = parser.GetTables(sql);
 
-			Assert.AreEqual(14, results.SelectMany(r => r.Columns).Count());
+			Assert.AreEqual(2, results.SelectMany(r => r.Columns).Count());
 		}
 
 		[Test]
@@ -435,7 +272,7 @@ FROM AetnaClaim.Claim.Enrollment e";
 			var parser = new Parser();
 			var results = parser.GetTables(sql);
 
-			Assert.AreEqual(2, results.SelectMany(r => r.Columns).Count());
+			Assert.AreEqual(8, results.SelectMany(r => r.Columns).Count());
 		}
 
 		[Test]
@@ -548,5 +385,57 @@ INNER JOIN Bar ON aID = af.EventID";
 			
 			Assert.AreEqual(1, results.SelectMany(r => r.Columns).Count());
 		}
-	}
+
+    [Test]
+    public void UnpivotColumns()
+    {
+      var sql = @"SELECT pv.[Value]
+	FROM Table1 AS t1
+	UNPIVOT
+	(
+		[Value] 
+		FOR [Observed] IN([Column1],[Column2])
+	) AS pv";
+      var parser = new Parser();
+      var results = parser.GetTables(sql);
+
+      Assert.AreEqual(2, results.SelectMany(r => r.Columns).Count());
+    }
+    
+    [Test]
+    public void UnpivotWithJoinColumns()
+    {
+      var sql = @"SELECT unp.ColumnNames, unp.ColumnValues, unp.Value1, t2.Category1, t2.Value1 AS t2Value1 FROM (
+    SELECT 
+         t1.Item1
+        ,t1.Item2
+        ,t1.Value1
+    FROM table1 AS t1
+    ) AS a
+    UNPIVOT (ColumnValues FOR ColumnNames IN (Item1,Item2)) AS unp
+    INNER JOIN table2 AS t2 ON t2.[ItemNM] = unp.[ColumnValues]";
+      var parser = new Parser();
+      var results = parser.GetTables(sql);
+
+      Assert.AreEqual(6, results.SelectMany(r => r.Columns).Count());
+    }
+
+    [Test]
+    public void UnpivotWithUnAliasedColumns()
+    {
+      var sql = @"SELECT ColumnNames, ColumnValues, unp.Value1, t2.Category1, t2.Value1 AS t2Value1 FROM (
+    SELECT 
+         t1.Item1
+        ,t1.Item2
+        ,t1.Value1
+    FROM table1 AS t1
+    ) AS a
+    UNPIVOT (ColumnValues FOR ColumnNames IN (Item1,Item2)) AS unp
+    INNER JOIN table2 AS t2 ON t2.[ItemNM] = unp.[ColumnValues]";
+      var parser = new Parser();
+      var results = parser.GetTables(sql);
+
+      Assert.AreEqual(6, results.SelectMany(r => r.Columns).Count());
+    }
+  }
 }

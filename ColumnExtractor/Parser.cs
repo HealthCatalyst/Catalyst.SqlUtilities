@@ -12,20 +12,22 @@ namespace ColumnExtractor
 				private readonly bool _log;
 				private readonly bool _outputSelectStar;
 				private readonly bool _bracketOutput;
+        private readonly bool _outputPivotGeneratedColumns;
 
-				public Parser()
+        public Parser()
 				{
 						_log = false;
 						_outputSelectStar = false;
 						_bracketOutput = false;
 				}
 
-				public Parser(bool log, bool outputSelectStar, bool bracketOutput)
+				public Parser(bool log, bool outputSelectStar, bool bracketOutput, bool outputPivotGeneratedColumns = false)
 				{
 						_log = log;
 						_outputSelectStar = outputSelectStar;
 						_bracketOutput = bracketOutput;
-				}
+            _outputPivotGeneratedColumns = outputPivotGeneratedColumns;
+        }
 
 				public ParsedData GetColumns(string sql)
 				{
@@ -37,7 +39,9 @@ namespace ColumnExtractor
 								var result = parser.Parse(reader, out var errors);
 								var traverser = new Traverser(_log);
 								var columnData = traverser.TraverseObject(result, null).Distinct().ToArray();
-								var tableData = columnData.Where(c => c?.AmbiguousTableReferences != null)
+								var tableData = columnData
+                  .Where(c => _outputPivotGeneratedColumns || !c.IsPivotGeneratedColumn)
+                  .Where(c => c?.AmbiguousTableReferences != null)
 									.SelectMany(c => c.AmbiguousTableReferences)
 									.Concat(columnData.Select(c => c.AbsoluteTableReference))
 									.Where(c => c != null)
@@ -87,6 +91,7 @@ namespace ColumnExtractor
 								foreach (var table in tableData)
 								{
 										table.Columns = columnData
+                      .Where(c => _outputPivotGeneratedColumns || !c.IsPivotGeneratedColumn)
 											.Where(c => c.AbsoluteTableReference != null && table.Equals(new TableData(c.AbsoluteTableReference, _bracketOutput)))
 											.Select(c => new ColumnData(c, _bracketOutput))
 											.Where(cd => _outputSelectStar || cd.ColumnNM != "*")
@@ -94,7 +99,8 @@ namespace ColumnExtractor
 											.ToArray();
 
 										table.PossibleColumns = columnData
-											.Where(c => c.AmbiguousTableReferences != null && c.AmbiguousTableReferences.Any(t => table.Equals(new TableData(t, _bracketOutput))))
+                      .Where(c => _outputPivotGeneratedColumns || !c.IsPivotGeneratedColumn)
+                      .Where(c => c.AmbiguousTableReferences != null && c.AmbiguousTableReferences.Any(t => table.Equals(new TableData(t, _bracketOutput))))
 											.Select(c => new ColumnData(c, _bracketOutput))
 											.Where(cd => _outputSelectStar || cd.ColumnNM != "*")
 											.Distinct()
